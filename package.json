@@ -6,15 +6,20 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "jose": "5.9.6",
     "next": "15.3.0",
+    "pg": "8.14.1",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "stripe": "17.7.0"
   },
   "devDependencies": {
     "@types/node": "22.14.0",
+    "@types/pg": "8.11.11",
     "@types/react": "19.1.1",
     "@types/react-dom": "19.1.2",
     "eslint": "9.23.0",

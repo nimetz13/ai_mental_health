@@ -1,111 +1,194 @@
 # North Star
 
-`North Star` is a small paid AI mental health product prototype built for the AI Product Engineer test assignment.
+North Star is a production-shaped AI mental wellness product for emotionally overloaded professionals. It goes beyond the assignment baseline by combining onboarding, registration, monetization, persistent support sessions, check-ins, journaling, safety handling, and deployable infrastructure in one system.
 
-It is designed for emotionally overloaded professionals who look functional on the outside, but come to the product when they feel burnt out, tense, restless, or unable to switch off after work.
+## Product strategy
 
-## Product framing
+### Target user
 
-### 1. Target user
+- Knowledge workers, founders, managers, and operators with high cognitive load.
+- They arrive in moments of acute evening stress, rumination, burnout, emotional overload, or post-conflict spirals.
 
-- Knowledge workers, founders, managers, and tech professionals with high cognitive load.
-- They arrive when they feel overwhelmed, dysregulated, emotionally flooded, or stuck in late-night rumination.
+### Core problem
 
-### 2. Core problem
+Most wellness products require too much energy exactly when users have the least of it. In a high-stress moment, users do not want a content catalog. They want to feel understood quickly, regulate first, and know what to do next.
 
-Generic wellness apps often ask for too much energy. When a user is overwhelmed, they do not want a library of content. They want fast emotional decompression, a feeling of being understood, and one clear next step.
+### Value proposition
 
-### 3. Value proposition
+North Star sells a narrow and clear promise:
 
-North Star combines:
+- personalized emotional decompression in under ten minutes
+- a repeatable nightly support ritual
+- persistent AI support that remembers context
+- conversion into a paid relationship after value is already visible
 
-- Short onboarding that identifies the user context and desired outcome.
-- Personalized AI chat as the main feature.
-- Quick reset exercises for immediate regulation.
-- Reflection prompts without the blank-page problem.
-- A monetization moment placed after personalized value is visible.
+## Why this version beats the assignment
 
-The user pays not for content volume, but for tailored support and a repeatable recovery ritual.
+This repo no longer behaves like a static prototype. It now includes:
 
-## Why the onboarding is designed this way
+- account registration and login with signed session cookies
+- persistent storage for users, onboarding profile, conversations, journal entries, check-ins, and subscriptions
+- storage abstraction with PostgreSQL support and file fallback for local/demo use
+- safety-aware chat orchestration with crisis escalation behavior
+- Stripe-ready subscription checkout and webhook processing
+- health endpoint, Docker, CI/CD, and a GHCR publish workflow
 
-The onboarding intentionally moves in this order:
+## Product flow
 
-1. Frame the emotional use case and paid value.
-2. Ask only a few high-signal questions: stressor, desired outcome, current mood.
-3. Ask for registration after the user sees a personalized promise.
-4. Show the paywall once the recovery plan feels concrete.
+1. Marketing framing explains who the product is for and why it is paid.
+2. Onboarding captures stressor, goal, mood, and plan preference.
+3. Registration happens only after the user sees a personalized promise.
+4. Paywall converts the user into a trial with a concrete outcome, not generic premium language.
+5. Workspace unlocks the core system:
+   AI support chat
+   mood check-ins
+   guided journaling
+   recovery insights
+   persistent conversation history
 
-This improves conversion because the user first feels understood, then sees what they are unlocking.
+## Core features
 
-## MVP features
+### 1. AI support chat
 
-### Core feature
+The primary feature. It provides short emotional support, grounding, reflection, and next-step guidance.
 
-- AI support chat: grounding, reflection, emotional validation, and next-step coaching.
+### 2. Daily check-in
 
-### Supporting features
+Creates longitudinal user state so the product can become more intelligent over time and build retention loops.
 
-- Mood-aware quick resets.
-- Reflection prompt tuned to current mood.
-- Lightweight insight card that mirrors back a useful pattern.
+### 3. Guided journal
 
-These are intentionally small so the prototype feels coherent and shippable within the assignment scope.
+Reduces blank-page friction by using the onboarding state and current mood to choose prompts and produce summaries.
+
+### 4. Recovery insights
+
+Mirrors back dominant mood patterns, average stress, and behavioral recommendations.
 
 ## AI architecture
 
-- Frontend: Next.js App Router.
-- Backend: Next.js API route at `app/api/chat/route.ts`.
-- AI layer:
-  - Uses OpenAI Chat Completions API when `OPENAI_API_KEY` is set.
-  - Falls back to deterministic supportive responses when no key is available, so the demo still works.
-- Safety:
-  - Detects basic self-harm language.
-  - Escalates to immediate human support guidance and includes `988` for US crisis support.
+### Main AI boundary
 
-## Infrastructure choices
+- `app/api/chat/route.ts` is the main conversation endpoint.
+- The assistant response is generated in `lib/ai.ts`.
+- Safety classification lives in `lib/safety.ts`.
 
-- Single service Next.js app for speed and pragmatism.
-- Dockerized with a multi-stage production build.
-- CI with GitHub Actions: install, lint, build.
-- CD with GitHub Actions: build and publish Docker image to GHCR.
+### AI orchestration design
+
+The system follows a simple but production-relevant flow:
+
+1. classify user risk signal
+2. load user profile and prior conversation context
+3. choose the support mode
+4. generate a concise response with guardrails
+5. persist both user and assistant messages
+
+### Safety behavior
+
+- Critical self-harm language triggers crisis-safe guidance and bypasses normal support behavior.
+- Elevated stress language steers the model toward regulation-first responses.
+- The system explicitly avoids diagnosis claims and therapeutic overreach.
+
+## Data model
+
+The app persists:
+
+- users
+- profiles
+- subscriptions
+- conversations
+- messages
+- check-ins
+- journal entries
+
+If `DATABASE_URL` is provided, the app uses PostgreSQL. Otherwise it falls back to a local JSON store for demos.
+
+## Auth and billing
+
+### Auth
+
+- Registration and login are handled with route handlers.
+- Passwords are hashed with Node `scrypt`.
+- Sessions are stored in signed HTTP-only cookies using `jose`.
+
+### Billing
+
+- `app/api/billing/checkout/route.ts` starts the subscription flow.
+- If Stripe keys are configured, it creates a real Stripe Checkout session.
+- If Stripe keys are absent, it falls back to demo trial activation so the product can still be presented end-to-end.
+- `app/api/billing/webhook/route.ts` updates subscription state from Stripe events.
 
 ## Local run
 
 1. Copy `.env.example` to `.env`.
-2. Optionally set `OPENAI_API_KEY`.
-3. Install dependencies:
-
-```bash
-npm install
-```
-
-4. Start locally:
-
-```bash
-npm run dev
-```
-
-Or with Docker:
+2. Set `SESSION_SECRET`.
+3. Optionally set:
+   `OPENAI_API_KEY`
+   `STRIPE_SECRET_KEY`
+   `STRIPE_MONTHLY_PRICE_ID`
+   `STRIPE_YEARLY_PRICE_ID`
+   `STRIPE_WEBHOOK_SECRET`
+4. Start with Docker:
 
 ```bash
 docker compose up --build
 ```
 
+This runs:
+
+- the Next.js app on port `3000`
+- PostgreSQL on port `5432`
+
+## CI/CD
+
+### CI
+
+GitHub Actions runs:
+
+- `npm install`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run build`
+
+### CD
+
+On push to `main`, Docker images are built and published to GHCR.
+
 ## Deployment recommendation
 
-Best options for this project:
+For real go-to-market, the strongest pragmatic setup is:
 
-- Railway: fastest path for a Dockerized MVP with easy env var management.
-- Render: strong for simple web services and easy GitHub integration.
-- Fly.io: good if you want more infrastructure control and global deployment.
-- DigitalOcean App Platform: solid if you want predictable managed hosting.
+- `Railway` for the app service
+- managed PostgreSQL on Railway or Neon
+- Stripe for subscriptions
+- custom domain like `app.yourbrand.com`
 
-For the test assignment, I would deploy it on Railway or Render first because the setup friction is lowest.
+Second-best option:
 
-## What to say in the defense
+- `Render` for app + PostgreSQL
 
-- The onboarding converts because it reduces cognitive load and shows personalized value before asking for money.
-- The chat is the MVP because it is the shortest path from distress to relief.
-- Supporting features exist to make the chat feel trustworthy, actionable, and habit-forming.
-- The architecture is intentionally compact: one deployable service, one API route, one AI boundary, one Docker image.
+If you want more infra control:
+
+- `Fly.io` with managed Postgres or external Neon
+
+## What still remains before a true public launch
+
+This version is much closer to market than the original assignment, but for a real public release I would still add:
+
+- clinician-reviewed safety copy and escalation policy
+- dedicated analytics and event instrumentation
+- Sentry or similar error monitoring
+- email delivery for onboarding and retention flows
+- Stripe customer portal
+- admin tools for support review and prompt/policy tuning
+- legal pages, privacy policy, and consent handling for sensitive data
+
+## Defense framing
+
+Use these points in the review call:
+
+- I intentionally narrowed the ICP to emotionally overloaded professionals because narrow pain converts better than generic wellness.
+- The onboarding asks only for information that directly improves support quality and subscription conversion.
+- Registration happens after the personalized promise because perceived value needs to exist before commitment.
+- The MVP is not only chat. It is a support loop: check-in, regulate, reflect, and return.
+- I designed the AI architecture around safety and state, because mental health products cannot be treated like stateless chat wrappers.
+- I added real product infrastructure so the system can plausibly be deployed and sold, not just demoed.
