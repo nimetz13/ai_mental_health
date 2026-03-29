@@ -14,10 +14,13 @@ export async function POST(request: Request) {
     return jsonError("Prompt and content are required.");
   }
 
+  const memories = await store.listMemories(auth.record.user.id);
+
   const summaryResult = await generateAssistantReply({
     message: `Summarize this reflection in two sentences and suggest one next step:\n\n${body.content}`,
     profile: auth.record.profile,
     history: [],
+    memories,
   });
 
   const entry = await store.createJournalEntry(auth.record.user.id, {

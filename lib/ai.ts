@@ -1,6 +1,6 @@
 import { appConfig } from "@/lib/config";
 import { buildMoodPrompt, classifySafetyLevel, getSafetyCopy } from "@/lib/safety";
-import { StoredMessage, UserProfile } from "@/lib/types";
+import { MemoryItem, StoredMessage, UserProfile } from "@/lib/types";
 
 function getConversationSummary(messages: StoredMessage[]) {
   return messages
@@ -45,10 +45,18 @@ function buildFallbackReply(message: string) {
   return "I hear that this is heavy. You do not need to solve the whole thing tonight. Tell me what hurts most right now, and what would feel 10% lighter before you close the app.";
 }
 
+function getMemorySummary(memories: MemoryItem[]) {
+  return memories
+    .slice(0, 8)
+    .map((memory) => `- [${memory.category}] ${memory.content}`)
+    .join("\n");
+}
+
 export async function generateAssistantReply(input: {
   message: string;
   profile: UserProfile | null;
   history: StoredMessage[];
+  memories: MemoryItem[];
 }) {
   const safetyLevel = classifySafetyLevel(input.message);
   const safety = getSafetyCopy(safetyLevel);
@@ -96,6 +104,10 @@ export async function generateAssistantReply(input: {
         {
           role: "system",
           content: `Safety mode: ${safetyLevel}. Conversation context:\n${getConversationSummary(input.history) || "No prior history."}`,
+        },
+        {
+          role: "system",
+          content: `Long-term memory about this user:\n${getMemorySummary(input.memories) || "No stored memories yet."}\nUse this context gently. Do not mention memory unless it is helpful and natural.`,
         },
         {
           role: "user",

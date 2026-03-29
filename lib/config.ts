@@ -12,18 +12,37 @@ export const appConfig = {
 
 export const planCatalog: Record<
   PlanId,
-  { label: string; price: string; cadence: string; pitch: string }
+  {
+    label: string;
+    price: string;
+    cadence: string;
+    pitch: string;
+    badge?: string;
+    originalPrice?: string;
+    note?: string;
+  }
 > = {
+  free: {
+    label: "Free",
+    price: "$0",
+    cadence: "forever",
+    pitch: "Try the product with lighter support and no payment friction.",
+    note: "Good for testing the ritual before committing.",
+  },
   monthly: {
     label: "Monthly",
     price: "$14",
     cadence: "per month",
     pitch: "Fastest way to start getting nightly support.",
+    note: "Full access with flexible commitment.",
   },
   yearly: {
     label: "Yearly",
     price: "$96",
     cadence: "per year",
     pitch: "Best for habit-building and calmer weeks over time.",
+    badge: "Save 43%",
+    originalPrice: "$168",
+    note: "Equivalent to $8 per month on the annual plan.",
   },
 };

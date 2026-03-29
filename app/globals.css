@@ -24,7 +24,13 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family:
+    "Avenir Next",
+    "Segoe UI",
+    "SF Pro Display",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   color: var(--text);
   background:
     radial-gradient(circle at top left, rgba(202, 103, 64, 0.22), transparent 32%),
@@ -75,6 +81,11 @@ button {
   padding: 24px;
 }
 
+.narrow-panel {
+  width: min(100%, 680px);
+  margin: 0 auto;
+}
+
 .marketing-copy h1 {
   font-size: clamp(3rem, 8vw, 6rem);
   line-height: 0.95;
@@ -102,6 +113,14 @@ button {
   color: var(--muted);
 }
 
+.marketing-copy h1,
+.section-title,
+.panel h2,
+.workspace-header h2,
+.card-heading h3 {
+  letter-spacing: -0.03em;
+}
+
 .label {
   display: inline-block;
   margin-bottom: 8px;
@@ -115,10 +134,95 @@ button {
 .session-list,
 .number-list,
 .workspace,
-.workspace-rail,
 .mini-form {
   display: grid;
   gap: 12px;
+}
+
+.hero-bullets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.hero-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.92rem;
+}
+
+.intro-actions {
+  margin-top: 24px;
+}
+
+.intro-panel {
+  align-self: start;
+}
+
+.expanded-toggle {
+  width: 100%;
+  justify-content: center;
+}
+
+.intro-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 220ms ease,
+    opacity 220ms ease;
+}
+
+.intro-drawer.expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.intro-drawer-inner {
+  overflow: hidden;
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.drawer-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(243, 232, 220, 0.62));
+  transform: translateY(6px);
+  animation: drawerRise 280ms ease forwards;
+}
+
+.drawer-card p {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.memory-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.memory-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.memory-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: capitalize;
+  font-family: Arial, sans-serif;
 }
 
 .point-card,
@@ -153,6 +257,29 @@ button {
 .critical-banner,
 .warning-banner {
   padding: 16px;
+}
+
+.divider {
+  position: relative;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-family: Arial, sans-serif;
+}
+
+.divider::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid var(--line);
+}
+
+.divider span {
+  position: relative;
+  padding: 0 10px;
+  background: var(--surface);
 }
 
 .number-list {
@@ -201,14 +328,16 @@ textarea {
 .ghost,
 .chip,
 .plan-card,
-.session-item {
+.session-item,
+.google-button {
   transition: transform 160ms ease, background 160ms ease, color 160ms ease;
 }
 
 .primary,
 .secondary,
 .ghost,
-.chip {
+.chip,
+.google-button {
   border-radius: 999px;
 }
 
@@ -221,7 +350,8 @@ textarea {
 
 .secondary,
 .ghost,
-.chip {
+.chip,
+.google-button {
   padding: 12px 16px;
   background: rgba(255, 255, 255, 0.7);
   color: var(--text);
@@ -232,10 +362,16 @@ textarea {
   width: 100%;
 }
 
+.small-button {
+  padding: 8px 12px;
+  font-size: 0.88rem;
+}
+
 .primary:hover,
 .secondary:hover,
 .ghost:hover,
 .chip:hover,
+.google-button:hover,
 .plan-card:hover,
 .session-item:hover {
   transform: translateY(-1px);
@@ -268,6 +404,29 @@ textarea {
   background: rgba(255, 255, 255, 0.72);
 }
 
+.plan-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.plan-badge {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #dff0df;
+  color: #1f5c35;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.plan-strike {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
 .workspace {
   margin-top: 24px;
 }
@@ -288,6 +447,90 @@ textarea {
 
 .workspace-card {
   box-shadow: var(--shadow);
+}
+
+.tool-card {
+  display: grid;
+  gap: 16px;
+  align-self: start;
+  position: sticky;
+  top: 24px;
+}
+
+.tool-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.metric-pill {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(243, 232, 220, 0.76));
+  display: grid;
+  gap: 4px;
+}
+
+.metric-pill strong {
+  font-size: 1.35rem;
+  letter-spacing: -0.04em;
+}
+
+.metric-pill span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-family: Arial, sans-serif;
+}
+
+.tool-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.tool-tab {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--muted);
+  padding: 10px 12px;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.tool-tab.active {
+  background: linear-gradient(180deg, #d66c47, #b85a36);
+  color: #fffaf4;
+  border-color: transparent;
+  box-shadow: 0 12px 22px rgba(202, 103, 64, 0.22);
+}
+
+.tool-panel {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.68);
+  padding: 16px;
+  min-height: 520px;
+}
+
+.tool-content {
+  display: grid;
+  gap: 14px;
+}
+
+.compact-heading h3 {
+  font-size: 1.2rem;
+}
+
+.compact-heading p {
+  margin-top: 4px;
+}
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .card-heading h3 {
@@ -375,10 +618,31 @@ textarea {
   font-family: Arial, sans-serif;
 }
 
+@keyframes drawerRise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 980px) {
   .marketing-grid,
   .workspace-grid,
   .history-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-card {
+    position: static;
+  }
+
+  .tool-metrics,
+  .tool-tabs,
+  .mini-grid {
     grid-template-columns: 1fr;
   }
 

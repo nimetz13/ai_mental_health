@@ -13,6 +13,14 @@ function getSecret() {
   return encoder.encode(appConfig.sessionSecret);
 }
 
+function shouldUseSecureCookie() {
+  if (process.env.NODE_ENV !== "production") {
+    return false;
+  }
+
+  return appConfig.appUrl.startsWith("https://");
+}
+
 export async function createSessionToken(payload: SessionPayload) {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
@@ -28,7 +36,7 @@ export async function setSessionCookie(payload: SessionPayload) {
   cookieStore.set(appConfig.sessionCookie, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(),
     path: "/",
     maxAge: appConfig.sessionTtlSeconds,
   });
@@ -39,7 +47,7 @@ export async function clearSessionCookie() {
   cookieStore.set(appConfig.sessionCookie, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureCookie(),
     path: "/",
     maxAge: 0,
   });

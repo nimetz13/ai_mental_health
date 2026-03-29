@@ -25,6 +25,22 @@ export async function POST(request: Request) {
   const monthlyPriceId = process.env.STRIPE_MONTHLY_PRICE_ID;
   const yearlyPriceId = process.env.STRIPE_YEARLY_PRICE_ID;
 
+  if (planId === "free") {
+    const subscription = await store.upsertSubscription(auth.record.user.id, {
+      planId,
+      provider: "demo",
+      status: "active",
+      trialEndsAt: null,
+      currentPeriodEnd: null,
+    });
+
+    return NextResponse.json({
+      ok: true,
+      mode: "demo",
+      subscription,
+    });
+  }
+
   if (!stripeKey || !monthlyPriceId || !yearlyPriceId) {
     const subscription = await store.upsertSubscription(auth.record.user.id, {
       planId,

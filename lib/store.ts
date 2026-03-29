@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { Pool } from "pg";
 import { appConfig } from "@/lib/config";
+import { buildOnboardingMemories, mergeMemories } from "@/lib/memory";
 import { createId } from "@/lib/security";
 import {
   AppUser,
@@ -9,6 +10,7 @@ import {
   Conversation,
   DashboardData,
   JournalEntry,
+  MemoryItem,
   Mood,
   PlanId,
   SafetyLevel,
@@ -28,6 +30,7 @@ type StorePayload = {
   messages: StoredMessage[];
   checkIns: CheckIn[];
   journalEntries: JournalEntry[];
+  memories: MemoryItem[];
 };
 
 const emptyStore = (): StorePayload => ({
@@ -38,6 +41,7 @@ const emptyStore = (): StorePayload => ({
   messages: [],
   checkIns: [],
   journalEntries: [],
+  memories: [],
 });
 
 type RegisterInput = {
@@ -86,6 +90,12 @@ type JournalInput = {
   prompt: string;
   content: string;
   summary: string;
+};
+
+type MemoryInput = {
+  content: string;
+  category: MemoryItem["category"];
+  source: MemoryItem["source"];
 };
 
 export type UserRecord = {
@@ -148,6 +158,8 @@ class FileStore {
 
     store.users.push(user);
     store.profiles.push(profile);
+    const initialMemories = mergeMemories(store.memories, buildOnboardingMemories(input), user.id);
+    store.memories.push(...initialMemories);
     await this.save(store);
     return { user, profile, subscription: null };
   }
@@ -314,6 +326,32 @@ class FileStore {
     return entry;
   }
 
+  async listMemories(userId: string) {
+    const store = await this.load();
+    return store.memories
+      .filter((item) => item.userId === userId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, 12);
+  }
+
+  async remember(userId: string, input: MemoryInput[]) {
+    const store = await this.load();
+    const existing = store.memories.filter((item) => item.userId === userId);
+    const created = mergeMemories(existing, input, userId);
+    store.memories.push(...created);
+    await this.save(store);
+    return this.listMemories(userId);
+  }
+
+  async forgetMemory(userId: string, memoryId: string) {
+    const store = await this.load();
+    store.memories = store.memories.filter(
+      (item) => !(item.userId === userId && item.id === memoryId),
+    );
+    await this.save(store);
+    return this.listMemories(userId);
+  }
+
   async getDashboardData(userId: string): Promise<DashboardData> {
     const store = await this.load();
     const user = store.users.find((item) => item.id === userId);
@@ -340,6 +378,10 @@ class FileStore {
       .filter((item) => item.userId === userId)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
       .slice(0, 5);
+    const memories = store.memories
+      .filter((item) => item.userId === userId)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, 12);
 
     return {
       user: sanitizeUser(user),
@@ -352,6 +394,7 @@ class FileStore {
       },
       checkIns,
       journalEntries,
+      memories,
     };
   }
 }
@@ -426,6 +469,15 @@ class PostgresStore {
             summary TEXT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL
           );
+          CREATE TABLE IF NOT EXISTS memories (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            content TEXT NOT NULL,
+            category TEXT NOT NULL,
+            source TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+          );
         `)
         .then(() => undefined);
     }
@@ -476,6 +528,13 @@ class PostgresStore {
         profile.updatedAt,
       ],
     );
+    const memories = buildOnboardingMemories(input);
+    for (const memory of memories) {
+      await this.pool.query(
+        "INSERT INTO memories (id, user_id, content, category, source, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [createId("mem"), user.id, memory.content, memory.category, memory.source, now, now],
+      );
+    }
 
     return { user, profile, subscription: null };
   }
@@ -775,6 +834,56 @@ class PostgresStore {
     return entry;
   }
 
+  async listMemories(userId: string) {
+    await this.ensureSchema();
+    const result = await this.pool.query(
+      "SELECT id, user_id, content, category, source, created_at, updated_at FROM memories WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 12",
+      [userId],
+    );
+    return result.rows.map(
+      (row) =>
+        ({
+          id: row.id,
+          userId: row.user_id,
+          content: row.content,
+          category: row.category,
+          source: row.source,
+          createdAt: new Date(row.created_at).toISOString(),
+          updatedAt: new Date(row.updated_at).toISOString(),
+        }) satisfies MemoryItem,
+    );
+  }
+
+  async remember(userId: string, input: MemoryInput[]) {
+    await this.ensureSchema();
+    const existing = await this.listMemories(userId);
+    const created = mergeMemories(existing, input, userId);
+    for (const memory of created) {
+      await this.pool.query(
+        "INSERT INTO memories (id, user_id, content, category, source, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [
+          memory.id,
+          memory.userId,
+          memory.content,
+          memory.category,
+          memory.source,
+          memory.createdAt,
+          memory.updatedAt,
+        ],
+      );
+    }
+    return this.listMemories(userId);
+  }
+
+  async forgetMemory(userId: string, memoryId: string) {
+    await this.ensureSchema();
+    await this.pool.query("DELETE FROM memories WHERE id = $1 AND user_id = $2", [
+      memoryId,
+      userId,
+    ]);
+    return this.listMemories(userId);
+  }
+
   async getDashboardData(userId: string): Promise<DashboardData> {
     await this.ensureSchema();
     const record = await this.getUserRecord(userId);
@@ -795,6 +904,7 @@ class PostgresStore {
       "SELECT * FROM journal_entries WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5",
       [userId],
     );
+    const memories = await this.listMemories(userId);
 
     return {
       user: sanitizeUser(record.user),
@@ -826,6 +936,7 @@ class PostgresStore {
             createdAt: new Date(row.created_at).toISOString(),
           }) satisfies JournalEntry,
       ),
+      memories,
     };
   }
 }
@@ -858,5 +969,8 @@ export const store = {
   createCheckIn: (userId: string, input: CheckInInput) => getStore().createCheckIn(userId, input),
   createJournalEntry: (userId: string, input: JournalInput) =>
     getStore().createJournalEntry(userId, input),
+  listMemories: (userId: string) => getStore().listMemories(userId),
+  remember: (userId: string, input: MemoryInput[]) => getStore().remember(userId, input),
+  forgetMemory: (userId: string, memoryId: string) => getStore().forgetMemory(userId, memoryId),
   getDashboardData: (userId: string) => getStore().getDashboardData(userId),
 };

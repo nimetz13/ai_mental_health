@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateAssistantReply } from "@/lib/ai";
+import { extractMemoryCandidates } from "@/lib/memory";
 import { classifySafetyLevel } from "@/lib/safety";
 import { jsonError, requireUser } from "@/lib/server";
 import { store } from "@/lib/store";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     ).id;
 
   const currentConversation = await store.getConversation(userId, conversationId);
+  const memories = await store.listMemories(userId);
   const userSafety = classifySafetyLevel(message);
   await store.appendMessages(userId, conversationId, [
     {
@@ -44,7 +46,13 @@ export async function POST(request: Request) {
     message,
     profile: auth.record.profile,
     history: currentConversation.messages,
+    memories,
   });
+
+  const memoryCandidates = extractMemoryCandidates(message);
+  if (memoryCandidates.length) {
+    await store.remember(userId, memoryCandidates);
+  }
 
   const updatedConversation = await store.appendMessages(userId, conversationId, [
     {

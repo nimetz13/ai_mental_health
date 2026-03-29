@@ -6,6 +6,7 @@ import {
   CheckIn,
   Conversation,
   JournalEntry,
+  MemoryItem,
   Mood,
   PlanId,
   SafetyLevel,
@@ -32,6 +33,7 @@ type DashboardPayload = {
     };
     checkIns: CheckIn[];
     journalEntries: JournalEntry[];
+    memories: MemoryItem[];
   };
   insights: {
     dominantMood: string;
@@ -51,6 +53,8 @@ type OnboardingState = {
   mood: Mood;
   planPreference: PlanId;
 };
+
+type WorkspaceTool = "checkin" | "journal" | "memory" | "insights";
 
 const moodOptions: Mood[] = ["Spent", "Tense", "Restless", "Steady", "Hopeful"];
 
@@ -72,9 +76,72 @@ const quickResets = [
 
 const introPoints = [
   "Designed for high-functioning professionals who quietly hit emotional overload after intense days.",
-  "Uses onboarding to understand stressor, goal, mood, and buying intent before the first support session.",
+  "Uses onboarding to understand stressor, goal, and mood before the first support session.",
   "Converts through a concrete recovery promise, not through generic wellness messaging.",
 ];
+
+const stressorOptions = [
+  "Work burnout",
+  "General anxiety spike",
+  "Sleep and racing thoughts",
+  "Relationship stress",
+  "Panic or overwhelm",
+  "Loneliness and disconnection",
+  "Low self-worth and harsh self-talk",
+  "Grief or emotional loss",
+  "Decision fatigue and overthinking",
+  "Major life change",
+  "Motivation crash",
+  "Stress from caregiving or family pressure",
+];
+
+const goalOptions = [
+  "Stop spiraling before bed",
+  "Feel calmer in my body",
+  "Make sense of my emotions",
+  "Recover enough for tomorrow",
+  "Reduce panic faster",
+  "Handle triggers without shutting down",
+  "Be kinder to myself",
+  "Feel less alone with what I am carrying",
+  "Get unstuck and move again",
+  "Build a healthier coping rhythm",
+];
+
+function buildPromise(profile: Pick<OnboardingState, "stressor" | "goal">) {
+  const stressorCopy: Record<string, string> = {
+    "Work burnout": "recover after draining workdays without carrying all that weight alone",
+    "Relationship stress": "feel steadier and more grounded during relationship tension",
+    "Sleep and racing thoughts": "build a calmer shutdown ritual when your mind does not want to stop",
+    "General anxiety spike": "understand and manage anxiety spikes before they take over your day",
+    "Panic or overwhelm": "move through panic and overwhelm with more structure and less fear",
+    "Loneliness and disconnection": "feel less isolated when life feels emotionally far away",
+    "Low self-worth and harsh self-talk": "soften self-criticism and rebuild a steadier inner voice",
+    "Grief or emotional loss": "carry grief with more support and less emotional shutdown",
+    "Decision fatigue and overthinking": "quiet mental overload when every choice feels heavy",
+    "Major life change": "stay grounded while life feels uncertain or in transition",
+    "Motivation crash": "regain traction when everything feels harder than it should",
+    "Stress from caregiving or family pressure":
+      "hold family and caregiving stress without losing yourself in it",
+  };
+
+  const goalCopy: Record<string, string> = {
+    "Stop spiraling before bed": "so over time you can interrupt spirals earlier and feel more in control",
+    "Feel calmer in my body": "so your nervous system can return to calm faster and more reliably",
+    "Make sense of my emotions": "so your emotions feel clearer, easier to name, and less overwhelming",
+    "Recover enough for tomorrow": "so stressful periods stop draining every following day",
+    "Reduce panic faster": "so panic loses intensity faster and stops running the whole moment",
+    "Handle triggers without shutting down": "so triggers feel more manageable and less consuming over time",
+    "Be kinder to myself": "so your inner dialogue becomes steadier, softer, and less punishing",
+    "Feel less alone with what I am carrying":
+      "so difficult emotions feel more shareable and less isolating",
+    "Get unstuck and move again": "so low-energy periods stop turning into longer emotional stalls",
+    "Build a healthier coping rhythm":
+      "so you rely less on survival habits and more on support that actually helps",
+  };
+
+  return `North Star helps you ${stressorCopy[profile.stressor] || profile.stressor.toLowerCase()} ${goalCopy[profile.goal] || `so you can ${profile.goal.toLowerCase()}`}.`;
+}
 
 async function readJson<T>(url: string, init?: RequestInit) {
   const response = await fetch(url, init);
@@ -105,6 +172,7 @@ export function MentalHealthApp() {
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [chatDraft, setChatDraft] = useState("");
   const [journalEntry, setJournalEntry] = useState("");
+  const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [checkIn, setCheckIn] = useState({
     mood: "Tense" as Mood,
     energy: 4,
@@ -118,6 +186,8 @@ export function MentalHealthApp() {
     description: string;
     resources: string[];
   } | null>(null);
+  const [activeTool, setActiveTool] = useState<WorkspaceTool>("checkin");
+  const [introExpanded, setIntroExpanded] = useState(false);
 
   const currentProfile = dashboard?.dashboard.profile || null;
   const currentSubscription = dashboard?.dashboard.subscription || null;
@@ -135,12 +205,24 @@ export function MentalHealthApp() {
 
     setSelectedConversationId(currentConversation.conversation?.id || null);
     setMessages(currentConversation.messages);
+    setMemories(dashboard.dashboard.memories);
   }, [dashboard]);
 
   const reflectionPrompt = useMemo(() => {
     const mood = currentProfile?.mood || onboarding.mood;
     return reflectionPrompts[mood];
   }, [currentProfile?.mood, onboarding.mood]);
+
+  const arrivalQuestion = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 5) {
+      return "What is weighing on you right now?";
+    }
+    if (hour < 17) {
+      return "What brings you here today?";
+    }
+    return "What brings you here tonight?";
+  }, []);
 
   async function loadSession() {
     try {
@@ -151,6 +233,10 @@ export function MentalHealthApp() {
       setCheckIn((current) => ({
         ...current,
         mood: payload.dashboard.profile?.mood || current.mood,
+      }));
+      setOnboarding((current) => ({
+        ...current,
+        planPreference: payload.dashboard.profile?.planPreference || current.planPreference,
       }));
     } catch {
       setDashboard(null);
@@ -193,6 +279,30 @@ export function MentalHealthApp() {
       await loadSession();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Login failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleDemoAuth() {
+    setLoading(true);
+    setError(null);
+    try {
+      await readJson("/api/auth/google-demo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: onboarding.name || "Alex",
+          stressor: onboarding.stressor,
+          goal: onboarding.goal,
+          mood: onboarding.mood,
+          planPreference: onboarding.planPreference,
+        }),
+      });
+      await loadSession();
+      setStage("paywall");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Google sign-in failed.");
     } finally {
       setLoading(false);
     }
@@ -359,17 +469,53 @@ export function MentalHealthApp() {
     }
   }
 
+  async function forgetMemory(memoryId: string) {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = await readJson<{ memories: MemoryItem[] }>("/api/memories", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memoryId }),
+      });
+      setMemories(payload.memories);
+      await loadSession();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Could not remove memory.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function renderIntro() {
     return (
       <section className="marketing-grid">
         <div className="marketing-copy">
-          <span className="kicker">Mental health AI product</span>
+          <span className="kicker">Emotional support that remembers you</span>
           <h1>North Star</h1>
           <p className="lede">
-            A production-shaped recovery companion for emotionally overloaded professionals.
-            It turns stress signals into a personalized support ritual, subscription flow,
-            and safety-aware AI session.
+            Your AI companion for stress, overwhelm, anxiety, and emotional recovery.
+            North Star helps you feel understood quickly, build steadier coping habits, and
+            come back to a support system that actually remembers what matters.
           </p>
+          <div className="hero-bullets">
+            <div className="hero-chip">Personalized onboarding</div>
+            <div className="hero-chip">Memory-aware AI support</div>
+            <div className="hero-chip">Check-ins, journal, and recovery tools</div>
+          </div>
+          <div className="button-row intro-actions">
+            <button className="primary" onClick={() => setStage("profile")} type="button">
+              Start your support plan
+            </button>
+            <button className="secondary" onClick={() => setStage("login")} type="button">
+              I already have an account
+            </button>
+          </div>
+        </div>
+
+        <div className="panel intro-panel">
+          <span className="eyebrow">How it works</span>
+          <h2>Support that gets better as it gets to know you</h2>
           <div className="point-list">
             {introPoints.map((point) => (
               <div className="point-card" key={point}>
@@ -377,24 +523,35 @@ export function MentalHealthApp() {
               </div>
             ))}
           </div>
-        </div>
 
-        <div className="panel">
-          <span className="eyebrow">Detailed plan</span>
-          <h2>What is being built to beat the assignment</h2>
-          <ol className="number-list">
-            <li>Auth, session cookies, and persistent user profiles.</li>
-            <li>Server-stored conversations, check-ins, journals, and subscription state.</li>
-            <li>Safety-aware AI orchestration with crisis escalation logic.</li>
-            <li>Stripe-ready monetization flow and webhook handling.</li>
-            <li>Docker, CI/CD, health endpoint, and deploy-ready configuration.</li>
-          </ol>
-          <button className="primary" onClick={() => setStage("profile")} type="button">
-            Start personalized onboarding
+          <button
+            className={introExpanded ? "secondary expanded-toggle" : "secondary expanded-toggle"}
+            onClick={() => setIntroExpanded((current) => !current)}
+            type="button"
+          >
+            {introExpanded ? "Hide product details" : "See what powers North Star"}
           </button>
-          <button className="secondary" onClick={() => setStage("login")} type="button">
-            I already have an account
-          </button>
+
+          <div className={introExpanded ? "intro-drawer expanded" : "intro-drawer"}>
+            <div className="intro-drawer-inner">
+              <div className="drawer-card">
+                <strong>Personalized support flow</strong>
+                <p>Onboarding tunes the experience around the user&apos;s stressor, goal, and mood before the first session begins.</p>
+              </div>
+              <div className="drawer-card">
+                <strong>Long-term memory</strong>
+                <p>North Star stores important patterns, coping clues, and relevant personal context across conversations.</p>
+              </div>
+              <div className="drawer-card">
+                <strong>Safety-aware AI</strong>
+                <p>The assistant prioritizes grounding during elevated distress and shifts to crisis-safe guidance when risk language appears.</p>
+              </div>
+              <div className="drawer-card">
+                <strong>Paid product loop</strong>
+                <p>Chat, check-ins, journaling, and memory create a repeatable support ritual instead of a one-off conversation.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     );
@@ -403,7 +560,7 @@ export function MentalHealthApp() {
   function renderProfile() {
     return (
       <form
-        className="panel"
+        className="panel narrow-panel"
         onSubmit={(event) => {
           event.preventDefault();
           setStage("register");
@@ -412,12 +569,12 @@ export function MentalHealthApp() {
         <span className="eyebrow">Onboarding</span>
         <h2>Personalize the recovery path</h2>
         <p className="muted">
-          We only ask for signals that materially improve support quality and conversion:
-          stressor, desired outcome, present mood, and plan intent.
+          We only ask for signals that materially improve support quality: stressor,
+          desired outcome, and present mood.
         </p>
 
         <label>
-          First name
+          How should we address you?
           <input
             onChange={(event) => setOnboarding({ ...onboarding, name: event.target.value })}
             placeholder="Alex"
@@ -427,15 +584,14 @@ export function MentalHealthApp() {
         </label>
 
         <label>
-          What brings you here tonight?
+          {arrivalQuestion}
           <select
             onChange={(event) => setOnboarding({ ...onboarding, stressor: event.target.value })}
             value={onboarding.stressor}
           >
-            <option>Work burnout</option>
-            <option>Relationship stress</option>
-            <option>Sleep and racing thoughts</option>
-            <option>General anxiety spike</option>
+            {stressorOptions.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
           </select>
         </label>
 
@@ -445,10 +601,9 @@ export function MentalHealthApp() {
             onChange={(event) => setOnboarding({ ...onboarding, goal: event.target.value })}
             value={onboarding.goal}
           >
-            <option>Stop spiraling before bed</option>
-            <option>Feel calmer in my body</option>
-            <option>Make sense of my emotions</option>
-            <option>Recover enough for tomorrow</option>
+            {goalOptions.map((option) => (
+              <option key={option}>{option}</option>
+            ))}
           </select>
         </label>
 
@@ -468,32 +623,9 @@ export function MentalHealthApp() {
           </div>
         </div>
 
-        <div>
-          <span className="label">Preferred plan</span>
-          <div className="plan-grid">
-            {(Object.keys(planCatalog) as PlanId[]).map((planId) => (
-              <button
-                className={onboarding.planPreference === planId ? "plan-card active" : "plan-card"}
-                key={planId}
-                onClick={() => setOnboarding({ ...onboarding, planPreference: planId })}
-                type="button"
-              >
-                <strong>{planCatalog[planId].label}</strong>
-                <span>
-                  {planCatalog[planId].price} {planCatalog[planId].cadence}
-                </span>
-                <small>{planCatalog[planId].pitch}</small>
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="preview-box">
           <strong>Your promise</strong>
-          <p>
-            North Star will help you move through <strong>{onboarding.stressor.toLowerCase()}</strong>{" "}
-            so you can <strong>{onboarding.goal.toLowerCase()}</strong>.
-          </p>
+          <p>{buildPromise(onboarding)}</p>
         </div>
 
         <div className="button-row">
@@ -510,12 +642,20 @@ export function MentalHealthApp() {
 
   function renderRegister() {
     return (
-      <form className="panel" onSubmit={handleRegister}>
+      <form className="panel narrow-panel" onSubmit={handleRegister}>
         <span className="eyebrow">Registration</span>
         <h2>Create your account</h2>
         <p className="muted">
           Registration happens after personalized value is visible so intent is higher before the paywall.
         </p>
+
+        <button className="google-button" disabled={loading} onClick={() => void handleGoogleDemoAuth()} type="button">
+          Continue with Google
+        </button>
+
+        <div className="divider">
+          <span>or use email</span>
+        </div>
 
         <label>
           Email
@@ -556,7 +696,7 @@ export function MentalHealthApp() {
 
   function renderLogin() {
     return (
-      <form className="panel" onSubmit={handleLogin}>
+      <form className="panel narrow-panel" onSubmit={handleLogin}>
         <span className="eyebrow">Login</span>
         <h2>Resume your support plan</h2>
 
@@ -595,7 +735,7 @@ export function MentalHealthApp() {
   }
 
   function renderPaywall() {
-    const preferredPlan = currentProfile?.planPreference || onboarding.planPreference;
+    const preferredPlan = onboarding.planPreference;
     return (
       <section className="marketing-grid">
         <div className="marketing-copy">
@@ -625,11 +765,18 @@ export function MentalHealthApp() {
                 onClick={() => setOnboarding({ ...onboarding, planPreference: planId })}
                 type="button"
               >
-                <strong>{planCatalog[planId].label}</strong>
+                <div className="plan-topline">
+                  <strong>{planCatalog[planId].label}</strong>
+                  {planCatalog[planId].badge ? <span className="plan-badge">{planCatalog[planId].badge}</span> : null}
+                </div>
                 <span>
                   {planCatalog[planId].price} {planCatalog[planId].cadence}
                 </span>
+                {planCatalog[planId].originalPrice ? (
+                  <small className="plan-strike">{planCatalog[planId].originalPrice}</small>
+                ) : null}
                 <small>{planCatalog[planId].pitch}</small>
+                {planCatalog[planId].note ? <small>{planCatalog[planId].note}</small> : null}
               </button>
             ))}
           </div>
@@ -799,113 +946,208 @@ export function MentalHealthApp() {
           </article>
 
           <div className="workspace-rail">
-            <article className="workspace-card">
+            <article className="workspace-card tool-card">
               <div className="card-heading">
-                <h3>Daily check-in</h3>
-                <p>Turns the app into a longitudinal product with insight loops and retention.</p>
+                <h3>Companion tools</h3>
+                <p>Interactive support tools without the giant right-side scroll.</p>
               </div>
-              <form className="mini-form" onSubmit={saveCheckIn}>
-                <label>
-                  Mood
-                  <select
-                    onChange={(event) =>
-                      setCheckIn({ ...checkIn, mood: event.target.value as Mood })
-                    }
-                    value={checkIn.mood}
-                  >
-                    {moodOptions.map((mood) => (
-                      <option key={mood}>{mood}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Energy / 10
-                  <input
-                    max={10}
-                    min={1}
-                    onChange={(event) => setCheckIn({ ...checkIn, energy: Number(event.target.value) })}
-                    type="number"
-                    value={checkIn.energy}
-                  />
-                </label>
-                <label>
-                  Sleep hours
-                  <input
-                    max={12}
-                    min={0}
-                    onChange={(event) =>
-                      setCheckIn({ ...checkIn, sleepHours: Number(event.target.value) })
-                    }
-                    step="0.5"
-                    type="number"
-                    value={checkIn.sleepHours}
-                  />
-                </label>
-                <label>
-                  Stress / 10
-                  <input
-                    max={10}
-                    min={1}
-                    onChange={(event) =>
-                      setCheckIn({ ...checkIn, stressLevel: Number(event.target.value) })
-                    }
-                    type="number"
-                    value={checkIn.stressLevel}
-                  />
-                </label>
-                <label>
-                  Optional note
-                  <textarea
-                    onChange={(event) => setCheckIn({ ...checkIn, note: event.target.value })}
-                    placeholder="What spiked your stress today?"
-                    value={checkIn.note}
-                  />
-                </label>
-                <button className="primary" disabled={loading || !hasAccess} type="submit">
-                  Save check-in
-                </button>
-              </form>
-            </article>
 
-            <article className="workspace-card">
-              <div className="card-heading">
-                <h3>Guided journal</h3>
-                <p>The prompt is chosen from onboarding and current mood, so the blank page never blocks the user.</p>
+              <div className="tool-metrics">
+                <div className="metric-pill">
+                  <strong>{dashboard?.insights.averageStress ?? "?"}</strong>
+                  <span>Avg stress</span>
+                </div>
+                <div className="metric-pill">
+                  <strong>{dashboard?.insights.averageEnergy ?? "?"}</strong>
+                  <span>Avg energy</span>
+                </div>
+                <div className="metric-pill">
+                  <strong>{memories.length}</strong>
+                  <span>Saved memories</span>
+                </div>
               </div>
-              <div className="prompt-box">
-                <strong>{reflectionPrompt}</strong>
-              </div>
-              <form className="mini-form" onSubmit={saveJournal}>
-                <textarea
-                  onChange={(event) => setJournalEntry(event.target.value)}
-                  placeholder="Write without editing yourself for two minutes."
-                  value={journalEntry}
-                />
-                <button className="primary" disabled={loading || !hasAccess} type="submit">
-                  Save reflection
-                </button>
-              </form>
-            </article>
 
-            <article className="workspace-card">
-              <div className="card-heading">
-                <h3>Recovery system</h3>
-                <p>The product sells a repeatable decompression ritual, not a generic chat experience.</p>
+              <div className="tool-tabs">
+                <button
+                  className={activeTool === "checkin" ? "tool-tab active" : "tool-tab"}
+                  onClick={() => setActiveTool("checkin")}
+                  type="button"
+                >
+                  Check-in
+                </button>
+                <button
+                  className={activeTool === "journal" ? "tool-tab active" : "tool-tab"}
+                  onClick={() => setActiveTool("journal")}
+                  type="button"
+                >
+                  Journal
+                </button>
+                <button
+                  className={activeTool === "memory" ? "tool-tab active" : "tool-tab"}
+                  onClick={() => setActiveTool("memory")}
+                  type="button"
+                >
+                  Memory
+                </button>
+                <button
+                  className={activeTool === "insights" ? "tool-tab active" : "tool-tab"}
+                  onClick={() => setActiveTool("insights")}
+                  type="button"
+                >
+                  Insights
+                </button>
               </div>
-              <div className="reset-list">
-                {quickResets.map((reset) => (
-                  <div className="reset-item" key={reset}>
-                    {reset}
+
+              <div className="tool-panel">
+                {activeTool === "checkin" && (
+                  <div className="tool-content">
+                    <div className="card-heading compact-heading">
+                      <h3>Daily check-in</h3>
+                      <p>Log today so the product can spot patterns over time.</p>
+                    </div>
+                    <form className="mini-form" onSubmit={saveCheckIn}>
+                      <label>
+                        Mood
+                        <select
+                          onChange={(event) =>
+                            setCheckIn({ ...checkIn, mood: event.target.value as Mood })
+                          }
+                          value={checkIn.mood}
+                        >
+                          {moodOptions.map((mood) => (
+                            <option key={mood}>{mood}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="mini-grid">
+                        <label>
+                          Energy / 10
+                          <input
+                            max={10}
+                            min={1}
+                            onChange={(event) =>
+                              setCheckIn({ ...checkIn, energy: Number(event.target.value) })
+                            }
+                            type="number"
+                            value={checkIn.energy}
+                          />
+                        </label>
+                        <label>
+                          Sleep hours
+                          <input
+                            max={12}
+                            min={0}
+                            onChange={(event) =>
+                              setCheckIn({ ...checkIn, sleepHours: Number(event.target.value) })
+                            }
+                            step="0.5"
+                            type="number"
+                            value={checkIn.sleepHours}
+                          />
+                        </label>
+                      </div>
+                      <label>
+                        Stress / 10
+                        <input
+                          max={10}
+                          min={1}
+                          onChange={(event) =>
+                            setCheckIn({ ...checkIn, stressLevel: Number(event.target.value) })
+                          }
+                          type="number"
+                          value={checkIn.stressLevel}
+                        />
+                      </label>
+                      <label>
+                        Optional note
+                        <textarea
+                          onChange={(event) => setCheckIn({ ...checkIn, note: event.target.value })}
+                          placeholder="What pushed your nervous system today?"
+                          value={checkIn.note}
+                        />
+                      </label>
+                      <button className="primary" disabled={loading || !hasAccess} type="submit">
+                        Save check-in
+                      </button>
+                    </form>
                   </div>
-                ))}
-              </div>
-              <div className="insight-box">
-                <strong>Average stress</strong>
-                <p>{dashboard?.insights.averageStress ?? "No data yet"} / 10</p>
-              </div>
-              <div className="insight-box">
-                <strong>Average energy</strong>
-                <p>{dashboard?.insights.averageEnergy ?? "No data yet"} / 10</p>
+                )}
+
+                {activeTool === "journal" && (
+                  <div className="tool-content">
+                    <div className="card-heading compact-heading">
+                      <h3>Guided journal</h3>
+                      <p>The prompt adapts to mood so the blank page never wins.</p>
+                    </div>
+                    <div className="prompt-box">
+                      <strong>{reflectionPrompt}</strong>
+                    </div>
+                    <form className="mini-form" onSubmit={saveJournal}>
+                      <textarea
+                        onChange={(event) => setJournalEntry(event.target.value)}
+                        placeholder="Write without editing yourself for two minutes."
+                        value={journalEntry}
+                      />
+                      <button className="primary" disabled={loading || !hasAccess} type="submit">
+                        Save reflection
+                      </button>
+                    </form>
+                  </div>
+                )}
+
+                {activeTool === "memory" && (
+                  <div className="tool-content">
+                    <div className="card-heading compact-heading">
+                      <h3>What North Star remembers</h3>
+                      <p>Long-term context from onboarding, chat, and reflection.</p>
+                    </div>
+                    <div className="history-list">
+                      {memories.length ? (
+                        memories.map((memory) => (
+                          <div className="memory-item" key={memory.id}>
+                            <div className="memory-copy">
+                              <strong>{memory.content}</strong>
+                              <span>
+                                {memory.category} • {memory.source}
+                              </span>
+                            </div>
+                            <button
+                              className="ghost small-button"
+                              onClick={() => void forgetMemory(memory.id)}
+                              type="button"
+                            >
+                              Forget
+                            </button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="empty-state">
+                          Important patterns and personal context from conversations will appear here.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {activeTool === "insights" && (
+                  <div className="tool-content">
+                    <div className="card-heading compact-heading">
+                      <h3>Recovery system</h3>
+                      <p>The product sells a repeatable decompression ritual, not just chat.</p>
+                    </div>
+                    <div className="reset-list">
+                      {quickResets.map((reset) => (
+                        <div className="reset-item" key={reset}>
+                          {reset}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="insight-box">
+                      <strong>AI recommendation</strong>
+                      <p>{dashboard?.insights.recommendation}</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </article>
           </div>

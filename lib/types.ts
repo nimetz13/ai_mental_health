@@ -1,8 +1,16 @@
 export type Mood = "Spent" | "Tense" | "Restless" | "Steady" | "Hopeful";
 
-export type PlanId = "monthly" | "yearly";
+export type PlanId = "free" | "monthly" | "yearly";
 
 export type SafetyLevel = "normal" | "elevated" | "critical";
+export type MemoryCategory =
+  | "identity"
+  | "relationship"
+  | "trigger"
+  | "goal"
+  | "coping"
+  | "health"
+  | "context";
 
 export type AppUser = {
   id: string;
@@ -80,6 +88,16 @@ export type JournalEntry = {
   createdAt: string;
 };
 
+export type MemoryItem = {
+  id: string;
+  userId: string;
+  content: string;
+  category: MemoryCategory;
+  source: "onboarding" | "chat" | "journal" | "manual";
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type DashboardData = {
   user: Omit<AppUser, "passwordHash">;
   profile: UserProfile | null;
@@ -91,4 +109,5 @@ export type DashboardData = {
   };
   checkIns: CheckIn[];
   journalEntries: JournalEntry[];
+  memories: MemoryItem[];
 };
