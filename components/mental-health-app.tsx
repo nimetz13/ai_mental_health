@@ -942,7 +942,9 @@ export function MentalHealthApp() {
         <p className="muted">
           A few fast answers let North Star generate a sharper result before you create an account.
         </p>
-        {renderQuizStep()}
+        <div className="quiz-step-shell" key={quizStep}>
+          {renderQuizStep()}
+        </div>
         <div className="preview-box">
           <strong>What we are mapping</strong>
           <p>
@@ -1650,7 +1652,7 @@ export function MentalHealthApp() {
   }
 
   return (
-    <main className="shell">
+    <main className={`shell stage-shell stage-${stage}`}>
       {stage === "intro" && renderIntro()}
       {stage === "profile" && renderProfile()}
       {stage === "assessment" && renderAssessment()}
