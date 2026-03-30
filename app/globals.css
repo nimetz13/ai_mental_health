@@ -163,6 +163,14 @@ button {
   max-width: 60ch;
 }
 
+.hero-subcopy {
+  max-width: 52ch;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.65;
+  margin-top: -2px;
+}
+
 .kicker,
 .eyebrow {
   display: inline-block;
@@ -225,6 +233,22 @@ button {
 
 .intro-actions {
   margin-top: 24px;
+}
+
+.trust-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.trust-pill {
+  padding: 9px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(23, 34, 38, 0.08);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--muted);
+  font-size: 0.84rem;
 }
 
 .quiz-header {
@@ -348,6 +372,123 @@ button {
 
 .intro-panel {
   align-self: start;
+}
+
+.hero-orbit {
+  position: relative;
+  min-height: 320px;
+  border-radius: 28px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 223, 197, 0.72), transparent 28%),
+    radial-gradient(circle at 24% 26%, rgba(255, 255, 255, 0.8), transparent 18%),
+    radial-gradient(circle at 76% 20%, rgba(143, 199, 180, 0.3), transparent 22%),
+    linear-gradient(160deg, rgba(255, 248, 242, 0.92), rgba(241, 231, 220, 0.92));
+  border: 1px solid rgba(23, 34, 38, 0.06);
+}
+
+.hero-orbit::before,
+.hero-orbit::after {
+  content: "";
+  position: absolute;
+  inset: 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(202, 103, 64, 0.12);
+}
+
+.hero-orbit::after {
+  inset: 56px;
+  border-color: rgba(99, 154, 136, 0.14);
+}
+
+.orbit-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 180px;
+  height: 180px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.8), transparent 30%),
+    linear-gradient(180deg, #de744c, #b75c38);
+  color: #fffaf4;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 22px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 28px 40px rgba(183, 92, 56, 0.28);
+}
+
+.orbit-core span,
+.orbit-card span,
+.proof-card span {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.orbit-core strong {
+  font-size: 1.15rem;
+  line-height: 1.25;
+  margin-top: 6px;
+}
+
+.orbit-card {
+  position: absolute;
+  width: 180px;
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(23, 34, 38, 0.08);
+  box-shadow: 0 16px 28px rgba(82, 52, 34, 0.1);
+  display: grid;
+  gap: 6px;
+  backdrop-filter: blur(14px);
+}
+
+.orbit-card strong,
+.proof-card strong {
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.orbit-card-one {
+  left: 18px;
+  top: 34px;
+  animation: orbitFloatOne 6s ease-in-out infinite;
+}
+
+.orbit-card-two {
+  right: 22px;
+  top: 54px;
+  animation: orbitFloatTwo 6.6s ease-in-out infinite;
+}
+
+.orbit-card-three {
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  animation: orbitFloatThree 5.8s ease-in-out infinite;
+}
+
+.hero-proof {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.proof-card {
+  border: 1px solid rgba(23, 34, 38, 0.08);
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  display: grid;
+  gap: 6px;
 }
 
 .expanded-toggle {
@@ -1149,6 +1290,36 @@ textarea {
   }
 }
 
+@keyframes orbitFloatOne {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes orbitFloatTwo {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(10px);
+  }
+}
+
+@keyframes orbitFloatThree {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0px);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-8px);
+  }
+}
+
 @keyframes softSwap {
   from {
     opacity: 0;
@@ -1280,6 +1451,10 @@ textarea {
     text-align: center;
   }
 
+  .hero-proof {
+    grid-template-columns: 1fr;
+  }
+
   .companion-topline {
     justify-content: center;
     flex-wrap: wrap;
@@ -1308,6 +1483,45 @@ textarea {
 
   .marketing-copy h1 {
     font-size: 3rem;
+  }
+
+  .hero-orbit {
+    min-height: 360px;
+  }
+
+  .orbit-card-one,
+  .orbit-card-two,
+  .orbit-card-three {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    width: 100%;
+    transform: none;
+    animation: none;
+  }
+
+  .hero-orbit {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+  }
+
+  .hero-orbit::before,
+  .hero-orbit::after {
+    display: none;
+  }
+
+  .orbit-core {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 100%;
+    height: auto;
+    transform: none;
+    border-radius: 28px;
+    padding: 24px 18px;
   }
 
   .quiz-header {

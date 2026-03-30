@@ -742,17 +742,18 @@ export function MentalHealthApp() {
     return (
       <section className="marketing-grid">
         <div className="marketing-copy">
-          <span className="kicker">Emotional support that remembers you</span>
+          <span className="kicker">Feel better with support that remembers you</span>
           <h1>North Star</h1>
           <p className="lede">
-            Your AI companion for stress, overwhelm, anxiety, and emotional recovery.
-            North Star helps you feel understood quickly, build steadier coping habits, and
-            come back to a support system that actually remembers what matters.
+            A calmer place to land when stress, overthinking, or emotional overload starts taking over.
+          </p>
+          <p className="hero-subcopy">
+            Get personalized support, gentle reflection, and an AI companion that keeps track of what actually helps you recover.
           </p>
           <div className="hero-bullets">
-            <div className="hero-chip">Personalized onboarding</div>
-            <div className="hero-chip">Memory-aware AI support</div>
-            <div className="hero-chip">Check-ins, journal, and recovery tools</div>
+            <div className="hero-chip">Feels personal from the first minute</div>
+            <div className="hero-chip">Remembers triggers, patterns, and wins</div>
+            <div className="hero-chip">Helps you regulate, reflect, and reset</div>
           </div>
           <div className="button-row intro-actions">
             <button
@@ -765,23 +766,47 @@ export function MentalHealthApp() {
               }}
               type="button"
             >
-              Start your support plan
+              Take the 60-second quiz
             </button>
             <button className="secondary" onClick={() => setStage("login")} type="button">
-              I already have an account
+              Sign in
             </button>
+          </div>
+          <div className="trust-row">
+            <div className="trust-pill">Private by design</div>
+            <div className="trust-pill">Built for daily emotional support</div>
+            <div className="trust-pill">Chat, memory, and recovery tools in one flow</div>
           </div>
         </div>
 
         <div className="panel intro-panel">
-          <span className="eyebrow">How it works</span>
-          <h2>Support that gets better as it gets to know you</h2>
-          <div className="point-list">
-            {introPoints.map((point) => (
-              <div className="point-card" key={point}>
-                {point}
-              </div>
-            ))}
+          <div className="hero-orbit">
+            <div className="orbit-core">
+              <span>North Star</span>
+              <strong>Emotional support for hard moments</strong>
+            </div>
+            <div className="orbit-card orbit-card-one">
+              <span>Tonight</span>
+              <strong>Calm the spiral faster</strong>
+            </div>
+            <div className="orbit-card orbit-card-two">
+              <span>This week</span>
+              <strong>Spot patterns before they snowball</strong>
+            </div>
+            <div className="orbit-card orbit-card-three">
+              <span>Over time</span>
+              <strong>Build a steadier recovery rhythm</strong>
+            </div>
+          </div>
+          <div className="hero-proof">
+            <div className="proof-card">
+              <span>Guided support</span>
+              <strong>Chat that adapts to your answers</strong>
+            </div>
+            <div className="proof-card">
+              <span>Long-term memory</span>
+              <strong>Useful context carried across sessions</strong>
+            </div>
           </div>
 
           <button
@@ -789,27 +814,16 @@ export function MentalHealthApp() {
             onClick={() => setIntroExpanded((current) => !current)}
             type="button"
           >
-            {introExpanded ? "Hide product details" : "See what powers North Star"}
+            {introExpanded ? "Hide product details" : "See product details"}
           </button>
 
           <div className={introExpanded ? "intro-drawer expanded" : "intro-drawer"}>
             <div className="intro-drawer-inner">
-              <div className="drawer-card">
-                <strong>Personalized support flow</strong>
-                <p>Onboarding tunes the experience around the user&apos;s stressor, goal, and mood before the first session begins.</p>
-              </div>
-              <div className="drawer-card">
-                <strong>Long-term memory</strong>
-                <p>North Star stores important patterns, coping clues, and relevant personal context across conversations.</p>
-              </div>
-              <div className="drawer-card">
-                <strong>Safety-aware AI</strong>
-                <p>The assistant prioritizes grounding during elevated distress and shifts to crisis-safe guidance when risk language appears.</p>
-              </div>
-              <div className="drawer-card">
-                <strong>Paid product loop</strong>
-                <p>Chat, check-ins, journaling, and memory create a repeatable support ritual instead of a one-off conversation.</p>
-              </div>
+              {introPoints.map((point) => (
+                <div className="drawer-card" key={point}>
+                  <p>{point}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>
