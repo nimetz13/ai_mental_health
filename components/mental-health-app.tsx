@@ -15,7 +15,7 @@ import {
   UserSubscription,
 } from "@/lib/types";
 
-type AppStage = "intro" | "profile" | "register" | "paywall" | "login" | "workspace";
+type AppStage = "intro" | "profile" | "assessment" | "register" | "paywall" | "login" | "workspace";
 
 type DashboardPayload = {
   dashboard: {
@@ -52,6 +52,21 @@ type OnboardingState = {
   goal: string;
   mood: Mood;
   planPreference: PlanId;
+};
+
+type QuizState = {
+  timing: string;
+  frequency: string;
+  coping: string;
+};
+
+type AssessmentResult = {
+  fitLabel: string;
+  headline: string;
+  summary: string;
+  salesPitch: string;
+  cta: string;
+  bullets: string[];
 };
 
 type WorkspaceTool = "checkin" | "journal" | "memory" | "insights";
@@ -108,6 +123,37 @@ const goalOptions = [
   "Get unstuck and move again",
   "Build a healthier coping rhythm",
 ];
+
+const timingOptions = [
+  "Mostly at night when everything catches up",
+  "Right before stressful work or social moments",
+  "Randomly through the day with no clear warning",
+  "After conflict, rejection, or hard conversations",
+];
+
+const frequencyOptions = [
+  "A few hard moments this month",
+  "A few times every week",
+  "Almost every day",
+  "Multiple times a day lately",
+];
+
+const copingOptions = [
+  "I overthink and replay everything",
+  "I shut down or scroll to numb out",
+  "I push through until I crash",
+  "I reach out, but I still do not feel regulated",
+];
+
+const quizSteps = [
+  "Name",
+  "Main struggle",
+  "Desired outcome",
+  "Current mood",
+  "Toughest moment",
+  "Frequency",
+  "Current coping",
+] as const;
 
 function buildPromise(profile: Pick<OnboardingState, "stressor" | "goal">) {
   const stressorCopy: Record<string, string> = {
@@ -169,6 +215,13 @@ export function MentalHealthApp() {
   });
   const [login, setLogin] = useState({ email: "", password: "" });
   const [dashboard, setDashboard] = useState<DashboardPayload | null>(null);
+  const [quiz, setQuiz] = useState<QuizState>({
+    timing: timingOptions[0],
+    frequency: frequencyOptions[1],
+    coping: copingOptions[0],
+  });
+  const [quizStep, setQuizStep] = useState(0);
+  const [assessment, setAssessment] = useState<AssessmentResult | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   const [chatDraft, setChatDraft] = useState("");
@@ -198,6 +251,7 @@ export function MentalHealthApp() {
   const currentProfile = dashboard?.dashboard.profile || null;
   const currentSubscription = dashboard?.dashboard.subscription || null;
   const hasAccess = dashboard?.access || false;
+  const quizProgress = Math.round(((quizStep + 1) / quizSteps.length) * 100);
 
   useEffect(() => {
     void loadSession();
@@ -358,6 +412,28 @@ export function MentalHealthApp() {
     return "companion-stage";
   }, [beastState]);
 
+  const currentQuizPrompt = useMemo(() => {
+    const prompts = [
+      "How should North Star address you?",
+      arrivalQuestion,
+      "If this support worked, what would feel meaningfully better?",
+      "Which word feels closest to your nervous system right now?",
+      "When does this usually hit the hardest?",
+      "How often has this been affecting you lately?",
+      "What do you usually do when it hits?",
+    ];
+
+    return prompts[quizStep] || prompts[0];
+  }, [arrivalQuestion, quizStep]);
+
+  const canAdvanceQuiz = useMemo(() => {
+    if (quizStep === 0) {
+      return onboarding.name.trim().length > 1;
+    }
+
+    return true;
+  }, [onboarding.name, quizStep]);
+
   async function loadSession() {
     try {
       setAuthLoading(true);
@@ -440,6 +516,47 @@ export function MentalHealthApp() {
   function handleGoogleLogin() {
     setError(null);
     window.location.href = "/api/auth/google/start?mode=login";
+  }
+
+  function nextQuizStep() {
+    if (quizStep < quizSteps.length - 1 && canAdvanceQuiz) {
+      setQuizStep((current) => current + 1);
+    }
+  }
+
+  function previousQuizStep() {
+    if (quizStep > 0) {
+      setQuizStep((current) => current - 1);
+    } else {
+      setStage("intro");
+    }
+  }
+
+  async function runAssessment() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const payload = await readJson<{ assessment: AssessmentResult }>("/api/assessment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: onboarding.name,
+          stressor: onboarding.stressor,
+          goal: onboarding.goal,
+          mood: onboarding.mood,
+          timing: quiz.timing,
+          frequency: quiz.frequency,
+          coping: quiz.coping,
+        }),
+      });
+      setAssessment(payload.assessment);
+      setStage("assessment");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Assessment failed.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleLogout() {
@@ -638,7 +755,16 @@ export function MentalHealthApp() {
             <div className="hero-chip">Check-ins, journal, and recovery tools</div>
           </div>
           <div className="button-row intro-actions">
-            <button className="primary" onClick={() => setStage("profile")} type="button">
+            <button
+              className="primary"
+              onClick={() => {
+                setQuizStep(0);
+                setAssessment(null);
+                setError(null);
+                setStage("profile");
+              }}
+              type="button"
+            >
               Start your support plan
             </button>
             <button className="secondary" onClick={() => setStage("login")} type="button">
@@ -692,85 +818,209 @@ export function MentalHealthApp() {
   }
 
   function renderProfile() {
-    return (
-      <form
-        className="panel narrow-panel"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setStage("register");
-        }}
+    const optionCard = (label: string, selected: boolean, onClick: () => void, detail?: string) => (
+      <button
+        className={selected ? "quiz-option active" : "quiz-option"}
+        onClick={onClick}
+        type="button"
       >
-        <span className="eyebrow">Onboarding</span>
-        <h2>Personalize the recovery path</h2>
+        <strong>{label}</strong>
+        {detail ? <span>{detail}</span> : null}
+      </button>
+    );
+
+    const renderQuizStep = () => {
+      if (quizStep === 0) {
+        return (
+          <label className="quiz-input-wrap">
+            <span className="label">Your first name</span>
+            <input
+              onChange={(event) => setOnboarding({ ...onboarding, name: event.target.value })}
+              placeholder="Alex"
+              value={onboarding.name}
+            />
+          </label>
+        );
+      }
+
+      if (quizStep === 1) {
+        return (
+          <div className="quiz-grid">
+            {stressorOptions.map((option) =>
+              optionCard(
+                option,
+                onboarding.stressor === option,
+                () => setOnboarding({ ...onboarding, stressor: option }),
+              ),
+            )}
+          </div>
+        );
+      }
+
+      if (quizStep === 2) {
+        return (
+          <div className="quiz-grid">
+            {goalOptions.map((option) =>
+              optionCard(
+                option,
+                onboarding.goal === option,
+                () => setOnboarding({ ...onboarding, goal: option }),
+              ),
+            )}
+          </div>
+        );
+      }
+
+      if (quizStep === 3) {
+        return (
+          <div className="quiz-grid compact">
+            {moodOptions.map((mood) =>
+              optionCard(
+                mood,
+                onboarding.mood === mood,
+                () => setOnboarding({ ...onboarding, mood }),
+                mood === "Tense"
+                  ? "Alert, braced, hard to settle"
+                  : mood === "Spent"
+                    ? "Drained, depleted, close to empty"
+                    : mood === "Restless"
+                      ? "Agitated, fidgety, unable to land"
+                      : mood === "Steady"
+                        ? "Mostly okay, just need support"
+                        : "Open to change, ready to rebuild",
+              ),
+            )}
+          </div>
+        );
+      }
+
+      if (quizStep === 4) {
+        return (
+          <div className="quiz-grid compact">
+            {timingOptions.map((option) =>
+              optionCard(option, quiz.timing === option, () => setQuiz({ ...quiz, timing: option })),
+            )}
+          </div>
+        );
+      }
+
+      if (quizStep === 5) {
+        return (
+          <div className="quiz-grid compact">
+            {frequencyOptions.map((option) =>
+              optionCard(
+                option,
+                quiz.frequency === option,
+                () => setQuiz({ ...quiz, frequency: option }),
+              ),
+            )}
+          </div>
+        );
+      }
+
+      return (
+        <div className="quiz-grid compact">
+          {copingOptions.map((option) =>
+            optionCard(option, quiz.coping === option, () => setQuiz({ ...quiz, coping: option })),
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <section className="panel narrow-panel quiz-panel">
+        <div className="quiz-header">
+          <span className="eyebrow">Quick intake quiz</span>
+          <span className="quiz-step-pill">
+            {quizStep + 1}/{quizSteps.length}
+          </span>
+        </div>
+        <div className="quiz-progress">
+          <span style={{ width: `${quizProgress}%` }} />
+        </div>
+        <h2>{currentQuizPrompt}</h2>
         <p className="muted">
-          We only ask for signals that materially improve support quality: stressor,
-          desired outcome, and present mood.
+          A few fast answers let North Star generate a sharper result before you create an account.
         </p>
+        {renderQuizStep()}
+        <div className="preview-box">
+          <strong>What we are mapping</strong>
+          <p>
+            Stressor: {onboarding.stressor}. Goal: {onboarding.goal}. Hardest moment: {quiz.timing.toLowerCase()}.
+          </p>
+        </div>
+        {error ? <div className="error-banner">{error}</div> : null}
+        <div className="button-row">
+          <button className="secondary" onClick={previousQuizStep} type="button">
+            Back
+          </button>
+          {quizStep < quizSteps.length - 1 ? (
+            <button className="primary" disabled={!canAdvanceQuiz} onClick={nextQuizStep} type="button">
+              Next question
+            </button>
+          ) : (
+            <button className="primary" disabled={loading} onClick={() => void runAssessment()} type="button">
+              {loading ? "Reading your pattern..." : "See my result"}
+            </button>
+          )}
+        </div>
+      </section>
+    );
+  }
 
-        <label>
-          How should we address you?
-          <input
-            onChange={(event) => setOnboarding({ ...onboarding, name: event.target.value })}
-            placeholder="Alex"
-            required
-            value={onboarding.name}
-          />
-        </label>
+  function renderAssessment() {
+    const summary = assessment || {
+      fitLabel: "Support fit",
+      headline: "You are carrying more emotional load than your current coping loop can absorb.",
+      summary: "Your answers point to a pattern of stress buildup, late-day overload, and coping that helps you survive the moment but not fully settle after it.",
+      salesPitch:
+        "North Star is designed exactly for this kind of pattern: it helps you regulate faster, remember what actually works, and build a calmer recovery rhythm over time.",
+      cta: "Finish registration to unlock your personalized support plan.",
+      bullets: [
+        "Personalized chat based on your main stress pattern",
+        "Memory that keeps track of triggers and what helps",
+        "Check-ins and guided reflection that build long-term stability",
+      ],
+    };
 
-        <label>
-          {arrivalQuestion}
-          <select
-            onChange={(event) => setOnboarding({ ...onboarding, stressor: event.target.value })}
-            value={onboarding.stressor}
-          >
-            {stressorOptions.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-        </label>
-
-        <label>
-          What outcome would feel valuable right now?
-          <select
-            onChange={(event) => setOnboarding({ ...onboarding, goal: event.target.value })}
-            value={onboarding.goal}
-          >
-            {goalOptions.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-        </label>
-
-        <div>
-          <span className="label">Current mood</span>
-          <div className="chip-row">
-            {moodOptions.map((mood) => (
-              <button
-                className={onboarding.mood === mood ? "chip active" : "chip"}
-                key={mood}
-                onClick={() => setOnboarding({ ...onboarding, mood })}
-                type="button"
-              >
-                {mood}
-              </button>
+    return (
+      <section className="marketing-grid">
+        <div className="panel assessment-panel">
+          <span className="eyebrow">Your result</span>
+          <div className="assessment-fit">{summary.fitLabel}</div>
+          <h2>{summary.headline}</h2>
+          <p className="lede">{summary.summary}</p>
+          <div className="assessment-bullets">
+            {summary.bullets.map((bullet) => (
+              <div className="point-card" key={bullet}>
+                {bullet}
+              </div>
             ))}
           </div>
         </div>
 
-        <div className="preview-box">
-          <strong>Your promise</strong>
-          <p>{buildPromise(onboarding)}</p>
+        <div className="panel assessment-panel accent-panel">
+          <span className="eyebrow">What to do next</span>
+          <h2>North Star is built for exactly this kind of pattern</h2>
+          <p>{summary.salesPitch}</p>
+          <div className="preview-box">
+            <strong>Your promise</strong>
+            <p>{buildPromise(onboarding)}</p>
+          </div>
+          <div className="info-banner">
+            <strong>{summary.cta}</strong>
+          </div>
+          {error ? <div className="error-banner">{error}</div> : null}
+          <div className="button-row">
+            <button className="secondary" onClick={() => setStage("profile")} type="button">
+              Edit answers
+            </button>
+            <button className="primary" onClick={() => setStage("register")} type="button">
+              Finish registration
+            </button>
+          </div>
         </div>
-
-        <div className="button-row">
-          <button className="secondary" onClick={() => setStage("intro")} type="button">
-            Back
-          </button>
-          <button className="primary" type="submit">
-            Continue to account
-          </button>
-        </div>
-      </form>
+      </section>
     );
   }
 
@@ -817,8 +1067,11 @@ export function MentalHealthApp() {
         {error ? <div className="error-banner">{error}</div> : null}
 
         <div className="button-row">
-          <button className="secondary" onClick={() => setStage("profile")} type="button">
+          <button className="secondary" onClick={() => setStage("assessment")} type="button">
             Back
+          </button>
+          <button className="ghost" onClick={() => setStage("profile")} type="button">
+            Edit quiz answers
           </button>
           <button className="primary" disabled={loading} type="submit">
             {loading ? "Creating account..." : "Save my recovery plan"}
@@ -1400,6 +1653,7 @@ export function MentalHealthApp() {
     <main className="shell">
       {stage === "intro" && renderIntro()}
       {stage === "profile" && renderProfile()}
+      {stage === "assessment" && renderAssessment()}
       {stage === "register" && renderRegister()}
       {stage === "login" && renderLogin()}
       {stage === "paywall" && renderPaywall()}

@@ -52,6 +52,35 @@ function getMemorySummary(memories: MemoryItem[]) {
     .join("\n");
 }
 
+function buildAssessmentFallback(input: {
+  name?: string;
+  stressor: string;
+  goal: string;
+  mood: string;
+  timing: string;
+  frequency: string;
+  coping: string;
+}) {
+  const fitLabel = input.frequency.includes("Multiple")
+    ? "High support fit"
+    : input.frequency.includes("Almost")
+      ? "Strong support fit"
+      : "Good support fit";
+
+  return {
+    fitLabel,
+    headline: `${input.name || "You"} seem to be caught in a repeatable stress loop, not just having one bad day.`,
+    summary: `Your answers suggest that ${input.stressor.toLowerCase()} is showing up ${input.timing.toLowerCase()}, with a ${input.mood.toLowerCase()} nervous-system pattern and a coping style that currently leans toward "${input.coping.toLowerCase()}".`,
+    salesPitch: `That is exactly where North Star helps most: it turns vague overwhelm into a steady recovery process with guided support, emotional pattern tracking, and calmer next steps tied to your goal of "${input.goal.toLowerCase()}".`,
+    cta: "Finish registration to unlock your personalized support path and start using it tonight.",
+    bullets: [
+      `A support chat tuned to ${input.stressor.toLowerCase()} and your current mood`,
+      "Memory that keeps useful patterns, triggers, and calming strategies across sessions",
+      `A repeatable routine to help you ${input.goal.toLowerCase()}`,
+    ],
+  };
+}
+
 export async function generateAssistantReply(input: {
   message: string;
   profile: UserProfile | null;
@@ -136,4 +165,78 @@ export async function generateAssistantReply(input: {
     safetyLevel,
     safety,
   };
+}
+
+export async function generateAssessmentResult(input: {
+  name?: string;
+  stressor: string;
+  goal: string;
+  mood: string;
+  timing: string;
+  frequency: string;
+  coping: string;
+}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return buildAssessmentFallback(input);
+  }
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: appConfig.openAiModel,
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            'You create short, persuasive pre-signup mental health assessment results for a paid product. Return JSON with keys: fitLabel, headline, summary, salesPitch, cta, bullets. bullets must be an array of exactly 3 strings. Tone: empathetic, clear, premium, conversion-oriented. Do not diagnose or mention therapy. Make it feel like a useful mini-insight that naturally leads into registration.',
+        },
+        {
+          role: "user",
+          content: `Name: ${input.name || "User"}\nStressor: ${input.stressor}\nGoal: ${input.goal}\nMood: ${input.mood}\nTiming: ${input.timing}\nFrequency: ${input.frequency}\nCurrent coping: ${input.coping}`,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    return buildAssessmentFallback(input);
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  try {
+    const content = data.choices?.[0]?.message?.content || "";
+    const parsed = JSON.parse(content) as {
+      fitLabel?: string;
+      headline?: string;
+      summary?: string;
+      salesPitch?: string;
+      cta?: string;
+      bullets?: string[];
+    };
+
+    if (!parsed.headline || !parsed.summary || !parsed.salesPitch || !parsed.cta || !parsed.bullets?.length) {
+      return buildAssessmentFallback(input);
+    }
+
+    return {
+      fitLabel: parsed.fitLabel || "Support fit",
+      headline: parsed.headline,
+      summary: parsed.summary,
+      salesPitch: parsed.salesPitch,
+      cta: parsed.cta,
+      bullets: parsed.bullets.slice(0, 3),
+    };
+  } catch {
+    return buildAssessmentFallback(input);
+  }
 }
