@@ -60,7 +60,7 @@ button {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 24px;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .marketing-copy,
@@ -206,7 +206,7 @@ button {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: start;
+  align-items: flex-start;
   border: 1px solid var(--line);
   border-radius: 18px;
   padding: 14px;
@@ -435,7 +435,7 @@ textarea {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  align-items: end;
+  align-items: flex-end;
   padding: 24px 28px;
 }
 
@@ -648,7 +648,7 @@ textarea {
 
   .workspace-header,
   .warning-banner {
-    align-items: start;
+    align-items: flex-start;
     flex-direction: column;
   }
 }
