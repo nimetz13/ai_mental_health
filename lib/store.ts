@@ -110,7 +110,15 @@ function sanitizeUser(user: AppUser): SafeUser {
 }
 
 class FileStore {
-  private filePath = path.join(process.cwd(), appConfig.dataFilePath);
+  private filePath = this.resolveFilePath();
+
+  private resolveFilePath() {
+    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      return path.join("/tmp", appConfig.dataFilePath);
+    }
+
+    return path.join(process.cwd(), appConfig.dataFilePath);
+  }
 
   private async load() {
     try {
