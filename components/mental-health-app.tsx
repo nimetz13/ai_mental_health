@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { planCatalog } from "@/lib/config";
 import {
   CheckIn,
@@ -55,6 +55,7 @@ type OnboardingState = {
 };
 
 type WorkspaceTool = "checkin" | "journal" | "memory" | "insights";
+type BeastState = "resting" | "listening" | "speaking";
 
 const moodOptions: Mood[] = ["Spent", "Tense", "Restless", "Steady", "Hopeful"];
 
@@ -188,6 +189,11 @@ export function MentalHealthApp() {
   } | null>(null);
   const [activeTool, setActiveTool] = useState<WorkspaceTool>("checkin");
   const [introExpanded, setIntroExpanded] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [beastState, setBeastState] = useState<BeastState>("resting");
+  const [beastLine, setBeastLine] = useState("I am here. Tell me what feels heaviest right now.");
+  const [voiceReady, setVoiceReady] = useState(false);
+  const spokenMessageIds = useRef<Set<string>>(new Set());
 
   const currentProfile = dashboard?.dashboard.profile || null;
   const currentSubscription = dashboard?.dashboard.subscription || null;
@@ -237,6 +243,120 @@ export function MentalHealthApp() {
     }
     return "What brings you here tonight?";
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    const loadVoices = () => {
+      setVoiceReady(window.speechSynthesis.getVoices().length > 0);
+    };
+
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (loading) {
+      setBeastState("listening");
+      setBeastLine("I am listening closely and shaping the next response.");
+      return;
+    }
+
+    if (beastState === "listening") {
+      setBeastState("resting");
+    }
+  }, [loading, beastState]);
+
+  useEffect(() => {
+    const lastAssistantMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === "assistant");
+
+    if (!lastAssistantMessage) {
+      return;
+    }
+
+    setBeastLine(lastAssistantMessage.content);
+
+    if (
+      !voiceEnabled ||
+      typeof window === "undefined" ||
+      !("speechSynthesis" in window) ||
+      spokenMessageIds.current.has(lastAssistantMessage.id)
+    ) {
+      setBeastState("resting");
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(lastAssistantMessage.content);
+    const preferredVoice = window.speechSynthesis
+      .getVoices()
+      .find((voice) => /en-US|en_GB/i.test(`${voice.lang}`) && /google|samantha|daniel|serena|alloy/i.test(`${voice.name}`))
+      || window.speechSynthesis.getVoices().find((voice) => /^en/i.test(voice.lang))
+      || null;
+
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.pitch = 0.72;
+    utterance.rate = 0.92;
+    utterance.onstart = () => setBeastState("speaking");
+    utterance.onend = () => {
+      spokenMessageIds.current.add(lastAssistantMessage.id);
+      setBeastState("resting");
+    };
+    utterance.onerror = () => {
+      spokenMessageIds.current.add(lastAssistantMessage.id);
+      setBeastState("resting");
+    };
+
+    window.speechSynthesis.speak(utterance);
+
+    return () => {
+      utterance.onstart = null;
+      utterance.onend = null;
+      utterance.onerror = null;
+    };
+  }, [messages, voiceEnabled]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const beastStatus = useMemo(() => {
+    if (beastState === "speaking") {
+      return "Speaking";
+    }
+
+    if (beastState === "listening") {
+      return "Listening";
+    }
+
+    return voiceEnabled ? "Resting" : "Muted";
+  }, [beastState, voiceEnabled]);
+
+  const companionStageClass = useMemo(() => {
+    if (beastState === "speaking") {
+      return "companion-stage speaking";
+    }
+
+    if (beastState === "listening") {
+      return "companion-stage listening";
+    }
+
+    return "companion-stage";
+  }, [beastState]);
 
   async function loadSession() {
     try {
@@ -881,6 +1001,56 @@ export function MentalHealthApp() {
             <div className="card-heading">
               <h3>AI support chat</h3>
               <p>Safety-aware emotional support with persistence, context, and guided next steps.</p>
+            </div>
+
+            <div className={companionStageClass}>
+              <div className="companion-halo" />
+              <div className="companion-face" aria-hidden="true">
+                <div className="horn horn-left" />
+                <div className="horn horn-right" />
+                <div className="ear ear-left" />
+                <div className="ear ear-right" />
+                <div className="face-core">
+                  <div className="eye eye-left">
+                    <span className="eye-shine" />
+                  </div>
+                  <div className="eye eye-right">
+                    <span className="eye-shine" />
+                  </div>
+                  <div className="snout">
+                    <div className="snout-glow" />
+                    <div className="nose" />
+                    <div className="mouth">
+                      <div className="mouth-inner" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="companion-copy">
+                <div className="companion-topline">
+                  <span className="companion-badge">North Star Beast</span>
+                  <button
+                    className={voiceEnabled ? "ghost small-button voice-toggle active" : "ghost small-button voice-toggle"}
+                    onClick={() => {
+                      if (voiceEnabled && typeof window !== "undefined" && "speechSynthesis" in window) {
+                        window.speechSynthesis.cancel();
+                      }
+                      setVoiceEnabled((current) => !current);
+                      setBeastState("resting");
+                    }}
+                    type="button"
+                  >
+                    {voiceEnabled ? "Voice on" : "Voice off"}
+                  </button>
+                </div>
+                <strong>{beastStatus}</strong>
+                <p>{beastLine}</p>
+                <small>
+                  {voiceReady
+                    ? "Replies are voiced automatically to make the session feel more alive."
+                    : "Voice becomes available once the browser exposes a speech voice."}
+                </small>
+              </div>
             </div>
 
             {safetyState ? (
