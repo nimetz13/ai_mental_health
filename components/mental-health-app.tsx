@@ -437,6 +437,11 @@ export function MentalHealthApp() {
     window.location.href = `/api/auth/google/start?${params.toString()}`;
   }
 
+  function handleGoogleLogin() {
+    setError(null);
+    window.location.href = "/api/auth/google/start?mode=login";
+  }
+
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setDashboard(null);
@@ -828,6 +833,14 @@ export function MentalHealthApp() {
       <form className="panel narrow-panel" onSubmit={handleLogin}>
         <span className="eyebrow">Login</span>
         <h2>Resume your support plan</h2>
+
+        <button className="google-button" disabled={loading} onClick={handleGoogleLogin} type="button">
+          Continue with Google
+        </button>
+
+        <div className="divider">
+          <span>or use email</span>
+        </div>
 
         <label>
           Email

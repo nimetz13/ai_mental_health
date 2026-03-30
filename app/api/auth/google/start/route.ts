@@ -16,23 +16,25 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const mode = searchParams.get("mode") === "login" ? "login" : "register";
   const name = searchParams.get("name")?.trim();
   const stressor = searchParams.get("stressor")?.trim();
   const goal = searchParams.get("goal")?.trim();
   const mood = searchParams.get("mood") as Mood | null;
   const planPreference = (searchParams.get("planPreference") as PlanId | null) || "yearly";
 
-  if (!name || !stressor || !goal || !mood) {
+  if (mode === "register" && (!name || !stressor || !goal || !mood)) {
     return redirectWithError("Finish onboarding before continuing with Google.");
   }
 
   const nonce = randomUUID();
   const stateToken = await setOAuthStateCookie({
     nonce,
-    name,
-    stressor,
-    goal,
-    mood,
+    mode,
+    name: name || "",
+    stressor: stressor || "",
+    goal: goal || "",
+    mood: mood || "Tense",
     planPreference,
   });
 

@@ -11,6 +11,7 @@ type SessionPayload = {
 
 type OAuthStatePayload = {
   nonce: string;
+  mode: string;
   name: string;
   stressor: string;
   goal: string;

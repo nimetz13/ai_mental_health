@@ -81,6 +81,10 @@ export async function GET(request: Request) {
   if (existing) {
     await setSessionCookie({ userId: existing.id, email: existing.email });
   } else {
+    if (cookieState.mode === "login") {
+      return redirectWithError("No account is linked to this Google profile yet. Start with onboarding first.");
+    }
+
     const created = await store.createUser({
       email: profile.email,
       name: profile.name || cookieState.name,
