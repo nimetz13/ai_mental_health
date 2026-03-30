@@ -4,10 +4,13 @@ export const appConfig = {
   name: "North Star",
   appUrl: process.env.APP_URL || "http://localhost:3000",
   sessionCookie: "northstar_session",
+  googleOauthStateCookie: "northstar_google_oauth_state",
   sessionTtlSeconds: 60 * 60 * 24 * 14,
   sessionSecret: process.env.SESSION_SECRET || "dev-only-session-secret-change-me",
   openAiModel: process.env.OPENAI_MODEL || "gpt-4.1-mini",
   dataFilePath: process.env.DATA_FILE_PATH || "data/north-star.json",
+  googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
 };
 
 export const planCatalog: Record<

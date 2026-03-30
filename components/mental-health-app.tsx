@@ -198,6 +198,20 @@ export function MentalHealthApp() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("authError");
+    if (!authError) {
+      return;
+    }
+
+    setError(authError);
+    params.delete("authError");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
+
+  useEffect(() => {
     const currentConversation = dashboard?.dashboard.currentConversation;
     if (!currentConversation) {
       return;
@@ -284,28 +298,23 @@ export function MentalHealthApp() {
     }
   }
 
-  async function handleGoogleDemoAuth() {
-    setLoading(true);
+  function handleGoogleAuth() {
     setError(null);
-    try {
-      await readJson("/api/auth/google-demo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: onboarding.name || "Alex",
-          stressor: onboarding.stressor,
-          goal: onboarding.goal,
-          mood: onboarding.mood,
-          planPreference: onboarding.planPreference,
-        }),
-      });
-      await loadSession();
-      setStage("paywall");
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Google sign-in failed.");
-    } finally {
-      setLoading(false);
+
+    if (!onboarding.name || !onboarding.stressor || !onboarding.goal || !onboarding.mood) {
+      setError("Finish onboarding details before continuing with Google.");
+      return;
     }
+
+    const params = new URLSearchParams({
+      name: onboarding.name,
+      stressor: onboarding.stressor,
+      goal: onboarding.goal,
+      mood: onboarding.mood,
+      planPreference: onboarding.planPreference,
+    });
+
+    window.location.href = `/api/auth/google/start?${params.toString()}`;
   }
 
   async function handleLogout() {
@@ -649,7 +658,7 @@ export function MentalHealthApp() {
           Registration happens after personalized value is visible so intent is higher before the paywall.
         </p>
 
-        <button className="google-button" disabled={loading} onClick={() => void handleGoogleDemoAuth()} type="button">
+        <button className="google-button" disabled={loading} onClick={handleGoogleAuth} type="button">
           Continue with Google
         </button>
 
